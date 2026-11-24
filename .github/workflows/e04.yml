@@ -1,0 +1,95 @@
+name: PANVK 9300 E04 (experimental)
+on:
+  workflow_dispatch:
+  push:
+    paths: ['e04/READY']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [e04]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate E04 integer texel buffer patch and native C harness
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 e04/test.py
+          python3 - <<'PY'
+          from pathlib import Path
+          b = Path('scripts/build.sh').read_text().replace('e01','e04').replace('E01','E04')
+          b = b.replace('$ROOT/scripts/apply_e04.py','$ROOT/e04/apply.py')
+          b = b.replace('git -C "$MESA" add src/panfrost/vulkan/panvk_vX_cmd_meta.c','git -C "$MESA" add src/panfrost/compiler/pan_nir_lower_tex.c src/panfrost/compiler/bifrost/bifrost_compile.c')
+          b = b.replace('guard meta descriptor copies and trace color clears on arch 12','integer texel-buffer bit preservation via AUTO32 on arch 12')
+          Path('scripts/build_e04.sh').write_text(b)
+          p = Path('scripts/package.py')
+          p.write_text(p.read_text().replace('e01','e04').replace('E01','E04').replace('0.0.1','0.0.4'))
+          PY
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git ninja-build pkg-config python3-venv bison flex cmake llvm-20-dev clang-20 libclang-20-dev libclc-20-dev libllvmspirvlib-20-dev spirv-tools libdrm-dev libexpat1-dev zlib1g-dev libelf-dev libwayland-dev libx11-dev libxcb1-dev libxrandr-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libxext-dev glslang-tools
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install 'meson>=1.5' mako pyyaml packaging
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
+      - name: NDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.3.13750724'
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
+      - name: Build
+        run: bash scripts/build_e04.sh '${{ matrix.mode }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PANVK-9300-${{ matrix.mode }}-installable-if-build-passes
+          path: |
+            out/${{ matrix.mode }}/*.adpkg.zip
+            out/${{ matrix.mode }}/*.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-${{ matrix.mode }}
+          path: |
+            out/${{ matrix.mode }}/*.patch
+            out/${{ matrix.mode }}/*.unstripped.so
+            work/zenith-${{ matrix.mode }}/build/*.log
+            work/zenith-${{ matrix.mode }}/build/**/meson-logs/meson-log.txt
+          if-no-files-found: ignore
+
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PANVK-9300-e04-installable-if-build-passes
+          path: release
+      - name: Verify ZIP and publish direct download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c PANVK-9300-PEANUTS-E04.adpkg.zip.sha256
+          python3 - <<'PY'
+          import zipfile, json
+          with zipfile.ZipFile('PANVK-9300-PEANUTS-E04.adpkg.zip') as z:
+              assert z.testzip() is None
+              m = json.loads(z.read('meta.json'))
+              assert m['libraryName'] == 'libvulkan_panfrost.so'
+              b = z.read(m['libraryName'])
+              assert b[:6] == b'\x7fELF\x02\x01' and int.from_bytes(b[18:20],'little') == 183
+              assert b'PANVK9300_E04' in b
+          PY
+          tag="e04-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          gh release create "$tag" PANVK-9300-PEANUTS-E04.adpkg.zip PANVK-9300-PEANUTS-E04.adpkg.zip.sha256 --target "$GITHUB_SHA" --prerelease --title "PANVK 9300+ E04 experimental ($GITHUB_RUN_ID)" --notes "Experimental E04: arch 12 integer texel-buffer fetches use AUTO32 when guest result is float32, preserving stored bits; no FP16 changes. Static validation only; not tested on Xiaomi. No proven crash fix or FPS improvement. Retain your known working driver. GPU faults may cause device reboot."
+          echo "Direct ZIP: https://github.com/$GH_REPO/releases/download/$tag/PANVK-9300-PEANUTS-E04.adpkg.zip" >> "$GITHUB_STEP_SUMMARY"
