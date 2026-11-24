@@ -1,0 +1,28 @@
+{
+  "base": "Faux123 v1.1.8 (unchanged)",
+  "host": "Peanuts 0.1.7 / 719d4f7b6ffd",
+  "profiles": [
+    {
+      "name": "combat-invalid-texels",
+      "env": [
+        "DM_VK_NANSCAN=1"
+      ],
+      "diagnostic": true
+    },
+    {
+      "name": "gpu-cost",
+      "env": [
+        "DM_VK_GPUPROF=120"
+      ],
+      "diagnostic": true
+    },
+    {
+      "name": "compute-sync-ab",
+      "env": [
+        "DM_VK_CS_ASYNC=0"
+      ],
+      "diagnostic": false
+    }
+  ],
+  "rule": "One profile at a time; preserve existing settings and remove test lines afterward."
+}
