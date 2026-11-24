@@ -1,1 +1,1 @@
-E04 build trigger. Source patch and host regression tests are committed.
+E04 build trigger — corrected whitespace-tolerant source anchors and host regression tests. Build exact HEAD.
