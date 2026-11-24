@@ -2,11 +2,13 @@
 import subprocess
 import tempfile
 from pathlib import Path
-from apply import (
-    TEXEL_PATTERN, LOAD_CVT, LOAD_CVT_REPLACEMENT, patch, transform_texel_calls
-)
+from apply import LOAD_CVT, LOAD_CVT_REPLACEMENT, patch
 
-fixture = """   nir_def *val = nir_load_global_cvt_pan(b, tex->def.num_components,\n                                          tex->def.bit_size, addr, cvt,\n                                          tex->dest_type);\n"""\ntex, comp = patch(fixture + fixture, LOAD_CVT)
+fixture = """   nir_def *val = nir_load_global_cvt_pan(b, tex->def.num_components,
+                                          tex->def.bit_size, addr, cvt,
+                                          tex->dest_type);
+"""
+tex, comp = patch(fixture + fixture, LOAD_CVT)
 assert tex.count("AUTO32: preserve integer texel-buffer payload bits") == 2
 assert tex.count("load_type);") == 2
 assert "tex->dest_type == nir_type_float32 && tex->def.bit_size == 32" in tex
