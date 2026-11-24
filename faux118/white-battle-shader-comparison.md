@@ -38,3 +38,15 @@ Faux123 1.1.8 with DM_VK_TEX_PEEK=ead6e2a32540b19a,ed36f2f5bb1791b6 and limit 50
 On frame 1, all 13 recorded bindings of deferred-light shader ead6... have a made view. That does not verify the content, depth/stencil aspect or later battle frame. On frame 430, ed36... binding 273 gets two 2D placeholder IDs with no cube view; the replay explicitly reports a zero cube fallback. The same binding has valid cube views for other texture IDs at frame 430 and 2269. This demonstrates a mixed set of placeholder and actual cubes, not proof of the cause or whether a placeholder was sampled. The 32x32x32 render target appears at frame 1 but the text logs the 3D image's array layer count, not proof that 32 depth slices were or were not written. Avoid diagnosing a 3D-layer fault from that line alone.
 
 No shader fix is confirmed. To identify the producer and values, collect a scoped frame capture/image dump and inspect intermediate targets and LUT contents, or isolate a reproducible unit-level fault. No ROM, save, keys or raw personal device log are published here.
+
+## Source checks following the targeted capture
+
+A white-veil failure from compiler FPCR was documented on Qualcomm, but the Peanuts version used in these runs contains host FPCR wrappers; the log reads an fp0-generation pipeline cache. That does not verify Faux123's compiler outputs, and an fp0 cache filename alone is not a measured runtime FPCR. No change proposed on this evidence.
+
+The logged 32x32x32 target's image layers=1 is expected for a Vulkan 3D image: in this pinned Peanuts source the depth slices are distinct from array layers, and render passes use 2D/2D-array slice views. It does not prove the LUT's slices are correct or incorrect.
+
+On ead6... the depth-stencil inputs have views, but the current tex-peek log does not include the chosen image aspect. The pinned source selects stencil aspect when the texture or its view requests it; that is implementation evidence, not proof that the game's runtime flags and driver values are correct. Diagnose this using an actual captured sample before changing it.
+
+Diagnostic input snapshots without a PC: the available DM_VK_IMG_DUMP only triggers on the host's ctl screenshot command, not an ordinary phone screenshot, and writes binary files beside ctl.txt. The phone reports DM_CTL under Android/data, whose access varies with Android and file manager. No device access or user-tested phone-only method is available here; do not promise one.
+
+Sources: https://github.com/igawa6/peanuts-native/blob/719d4f7b6ffd/dm/gfx/vk_android/vka_tex.c and https://github.com/igawa6/peanuts-native/blob/719d4f7b6ffd/docs/reference/rendering.md .
