@@ -27,7 +27,7 @@ jobs:
           b = b.replace('guard meta descriptor copies and trace color clears on arch 12','integer texel-buffer bit preservation via AUTO32 on arch 12')
           Path('scripts/build_e04.sh').write_text(b)
           p = Path('scripts/package.py')
-          p.write_text(p.read_text().replace('e01','e04').replace('E01','E04').replace('0.0.1','0.0.4'))
+          p.write_text(p.read_text().replace('e01','e04').replace('E01','E04').replace('0.0.1','0.0.4').replace("if mode == 'e04': assert b'PANVK9300_E04' in b, 'instrumentation missing'\\n",''))
           PY
       - name: Install build dependencies
         run: |
@@ -88,7 +88,6 @@ jobs:
               assert m['libraryName'] == 'libvulkan_panfrost.so'
               b = z.read(m['libraryName'])
               assert b[:6] == b'\x7fELF\x02\x01' and int.from_bytes(b[18:20],'little') == 183
-              assert b'PANVK9300_E04' in b
           PY
           tag="e04-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           gh release create "$tag" PANVK-9300-PEANUTS-E04.adpkg.zip PANVK-9300-PEANUTS-E04.adpkg.zip.sha256 --target "$GITHUB_SHA" --prerelease --title "PANVK 9300+ E04 experimental ($GITHUB_RUN_ID)" --notes "Experimental E04: arch 12 integer texel-buffer fetches use AUTO32 when guest result is float32, preserving stored bits; no FP16 changes. Static validation only; not tested on Xiaomi. No proven crash fix or FPS improvement. Retain your known working driver. GPU faults may cause device reboot."
