@@ -20,10 +20,11 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git ninja-build pkg-config python3-venv bison flex cmake llvm-dev clang libclang-dev libclc-dev libllvmspirvlib-dev spirv-tools libdrm-dev libexpat1-dev zlib1g-dev libelf-dev libwayland-dev libx11-dev libxcb1-dev libxrandr-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libxext-dev glslang-tools
+          sudo apt-get install -y build-essential git ninja-build pkg-config python3-venv bison flex cmake llvm-20-dev clang-20 libclang-20-dev libclc-20-dev libllvmspirvlib-20-dev spirv-tools libdrm-dev libexpat1-dev zlib1g-dev libelf-dev libwayland-dev libx11-dev libxcb1-dev libxrandr-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libxext-dev glslang-tools
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install 'meson>=1.5' mako pyyaml packaging
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
       - name: NDK
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.3.13750724'
@@ -47,3 +48,36 @@ jobs:
             work/zenith-${{ matrix.mode }}/build/*.log
             work/zenith-${{ matrix.mode }}/build/**/meson-logs/meson-log.txt
           if-no-files-found: ignore
+
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PANVK-9300-e01-installable-if-build-passes
+          path: release
+      - name: Verify ZIP and publish direct download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c PANVK-9300-PEANUTS-E01.adpkg.zip.sha256
+          python3 - <<'PY'
+          import zipfile, json
+          with zipfile.ZipFile('PANVK-9300-PEANUTS-E01.adpkg.zip') as z:
+              assert z.testzip() is None
+              m = json.loads(z.read('meta.json'))
+              assert m['libraryName'] == 'libvulkan_panfrost.so'
+              b = z.read(m['libraryName'])
+              assert b[:6] == b'\x7fELF\x02\x01' and int.from_bytes(b[18:20],'little') == 183
+              assert b'PANVK9300_E01' in b
+          PY
+          tag="e01-build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          gh release create "$tag" PANVK-9300-PEANUTS-E01.adpkg.zip PANVK-9300-PEANUTS-E01.adpkg.zip.sha256 --target "$GITHUB_SHA" --prerelease --title "PANVK 9300+ E01 experimental ($GITHUB_RUN_ID)" --notes "Experimental diagnostic build. Static validation only; not tested on Xiaomi. No proven crash fix or FPS improvement. Retain your known working driver. GPU faults may cause device reboot."
+          echo "Direct ZIP: https://github.com/$GH_REPO/releases/download/$tag/PANVK-9300-PEANUTS-E01.adpkg.zip" >> "$GITHUB_STEP_SUMMARY"
