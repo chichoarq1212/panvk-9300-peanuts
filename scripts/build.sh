@@ -16,6 +16,8 @@ git -C "$UP" remote add origin https://github.com/zenithblue-oss/panvk-kbase-and
 git -C "$UP" fetch --depth=1 origin "$BASE"
 git -C "$UP" checkout --detach FETCH_HEAD
 [[ $(git -C "$UP" rev-parse HEAD) == "$BASE" ]]
+# Upstream shell helpers are checked in without executable mode.
+find "$UP/scripts" -type f -name "*.sh" -exec chmod u+x {} +
 mkdir -p "$MESA"
 git init -q "$MESA"
 git -C "$MESA" remote add origin https://gitlab.freedesktop.org/mesa/mesa.git
