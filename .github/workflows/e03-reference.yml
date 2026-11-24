@@ -1,0 +1,67 @@
+name: E03 reference comparison
+on:
+  workflow_run:
+    workflows: ["PANVK 9300 E03 (experimental)"]
+    types: [completed]
+permissions:
+  contents: read
+jobs:
+  compare:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fetch exact reference and E03 release
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 'https://github.com/faux123/panvk-faux123-driver-rp4pro/releases/download/v1.1.8/panvk_faux123_v1.1.8.adpkg.zip' -o reference.zip
+          echo '1898e89be6256e67762876fe249e9017717f8643cc5fb6194cf11195fe6da6c8  reference.zip' | sha256sum -c
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/e03-build-$RUN_ID-$ATTEMPT"
+          curl -fLsS --retry 3 "$base/PANVK-9300-PEANUTS-E03.adpkg.zip" -o PANVK-9300-PEANUTS-E03.adpkg.zip
+          curl -fLsS --retry 3 "$base/PANVK-9300-PEANUTS-E03.adpkg.zip.sha256" -o candidate.sha256
+          sha256sum -c candidate.sha256
+      - name: Compare package and loader ABI
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, subprocess, zipfile
+          from pathlib import Path
+          def inspect(path, label):
+              with zipfile.ZipFile(path) as z:
+                  assert z.testzip() is None
+                  m = json.loads(z.read('meta.json'))
+                  name = m['libraryName']
+                  assert '/' not in name and '\\' not in name
+                  b = z.read(name)
+              assert b[:6] == b'\x7fELF\x02\x01' and int.from_bytes(b[18:20],'little') == 183 and int.from_bytes(b[16:18],'little') == 3
+              digest = hashlib.sha256(b).hexdigest()
+              if label == 'reference':
+                  assert digest == '499e3eae32a27340777cb890aac92468c2519d57223bfad93a2e2a8f71029728'
+              p = Path(label+'.so')
+              p.write_bytes(b)
+              lines = subprocess.check_output(['readelf','--dyn-syms','--wide',str(p)],text=True).splitlines()
+              exports = set()
+              for line in lines:
+                  fields = line.split()
+                  if len(fields) >= 8 and fields[4] in ('GLOBAL','WEAK') and fields[5] in ('DEFAULT','PROTECTED') and fields[6] != 'UND':
+                      n = fields[7].split('@')[0]
+                      if n.startswith('vk') or n == 'HMI':
+                          exports.add(n)
+              needed = subprocess.check_output(['readelf','-d',str(p)],text=True)
+              return {'sha256':digest,'minApi':m.get('minApi'),'libraryName':name,'exports':sorted(exports),'needed':[l.strip() for l in needed.splitlines() if '(NEEDED)' in l]}
+          ref = inspect('reference.zip','reference')
+          e03 = inspect('PANVK-9300-PEANUTS-E03.adpkg.zip','candidate')
+          missing = sorted(set(ref['exports'])-set(e03['exports']))
+          report = {'reference':ref,'candidate':e03,'missing_reference_exports':missing,'hardware_equivalence':'NOT_TESTED'}
+          Path('comparison.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          assert ref['exports'], 'No reference exports identified'
+          assert not missing, 'Missing reference loader exports; investigate before claiming ABI equivalence'
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: E03-reference-comparison
+          path: comparison.json
+          if-no-files-found: ignore
