@@ -2,8 +2,11 @@
 """E03: experimental implicit FP32-to-FP16 RTZ on arch 12."""
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'e02'))
-from apply import patch as e02_patch
+import importlib.util
+spec = importlib.util.spec_from_file_location('e02_apply', Path(__file__).resolve().parents[1] / 'e02/apply.py')
+e02 = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(e02)
+e02_patch = e02.patch
 import re
 
 ANCHOR = """      else if (instr->op == nir_op_f2f16_rtne)
