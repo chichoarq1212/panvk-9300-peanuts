@@ -1,0 +1,49 @@
+name: PANVK 9300 E01 (experimental)
+on:
+  workflow_dispatch:
+  push:
+    paths: ['scripts/**', 'tests/**', '.github/workflows/build.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [baseline, e01]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate E01 patch and native C harness
+        run: python3 -m unittest discover -s tests -v
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git ninja-build pkg-config python3-venv bison flex cmake llvm-dev clang libclang-dev libclc-dev libllvmspirvlib-dev spirv-tools libdrm-dev libexpat1-dev zlib1g-dev libelf-dev libwayland-dev libx11-dev libxcb1-dev libxrandr-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libxext-dev glslang-tools
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install 'meson>=1.5' mako pyyaml packaging
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - name: NDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.3.13750724'
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
+      - name: Build
+        run: bash scripts/build.sh '${{ matrix.mode }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PANVK-9300-${{ matrix.mode }}-installable-if-build-passes
+          path: |
+            out/${{ matrix.mode }}/*.adpkg.zip
+            out/${{ matrix.mode }}/*.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostics-${{ matrix.mode }}
+          path: |
+            out/${{ matrix.mode }}/*.patch
+            out/${{ matrix.mode }}/*.unstripped.so
+            work/zenith-${{ matrix.mode }}/build/*.log
+            work/zenith-${{ matrix.mode }}/build/**/meson-logs/meson-log.txt
+          if-no-files-found: ignore
