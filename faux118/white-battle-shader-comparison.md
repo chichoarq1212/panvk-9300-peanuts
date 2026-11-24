@@ -20,3 +20,13 @@ Sources pinned to the actual host:
 ## Next technical work
 
 Identify the game's tonemap shader and its texture-size queries and bindings using the existing shader reflection and logs, then test a narrowly scoped hypothesis with an appropriate reproducible shader/binding case. Use Faux123 unchanged. Do not force every 1D texture to 2D or invalidate user caches without understanding the type and cache semantics. Do not claim a gameplay fix before a matching device test.
+
+## Game-specific evidence from available logs
+
+The game's source documentation identifies deferred-lighting fragment shader ead6e2a32540b19a, with 31 bindings, including a stencil-dependent read, and identifies b29f08619f379a83 in the 32x32x32 color-grading LUT build. The former occurs in the Faux123 0.5x log in a mixed scaled/unscaled texture read; this does not identify it as the cause of the white fight. A matching fallback occurs in both ordinary Faux123 logs: fragment shader ed36f2f5bb1791b6, binding 273, expects a cube but receives a 2D texture and thus reads zeros. The game documentation independently describes a 2D placeholder for a cube slot on the Mac route; both host and documentation caution that the binding may be unused. This is a reproducible binding mismatch, not proof of the white screen's cause; do not force a 2D-to-cube reinterpretation.
+
+The diagnostic ASTC test sampled a synthetic HDR-encoded block through an NVN 0x79 ASTC texture. The format corresponds to the LDR ASTC family in the host format table, so the observed NaN cannot by itself establish faulty HDR decoding or link it to the fight.
+
+Correction: the documented overwritten texture-command case with a white screen concerns Luigi's Mansion 3, not Pokémon Z-A. It should not be represented as a confirmed Z-A bug.
+
+Sources: https://github.com/igawa6/peanuts-native/blob/719d4f7b6ffd/dm/games/0100F43008C44000/README.md and https://github.com/igawa6/peanuts-native/blob/719d4f7b6ffd/docs/reference/nvn-objects.md .
