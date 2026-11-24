@@ -12,3 +12,6 @@ Acceptance order:
 E03 implements only a narrowly scoped implicit FP16 conversion experiment and E02 descriptor safeguards. Integer texel buffer bit preservation, Android loader presentation extension handling, and other private changes remain unverified. Do not blindly reinterpret all texture fetches: Vulkan typed access and guest Maxwell bit semantics differ. A reduced test is needed before implementing this path.
 
 Static comparison is an early gate, not a substitute for hardware tests.
+
+## Consolidated release policy (user requested no more intermediate releases)
+E03 is an archived experimental build, not the final driver. Its automatic push trigger is disabled. Do not start E04 or publish a new intermediate candidate merely because it compiles. Consolidate compatibility changes in a development branch or source directory; only publish a final candidate when its static and runtime acceptance evidence is documented. Preserve the official Faux123 package as fallback. The private patch tree and access to physical hardware are unresolved blockers; exact equivalence cannot be certified without them or independently demonstrated behavior. No changes to Android vendor, kernel, root, or bootloader.
