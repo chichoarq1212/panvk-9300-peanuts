@@ -1,8 +1,6 @@
 name: PANVK 9300 E03 (experimental)
 on:
   workflow_dispatch:
-  push:
-    paths: ['e03/**', '.github/workflows/e03.yml']
 permissions:
   contents: read
 jobs:
