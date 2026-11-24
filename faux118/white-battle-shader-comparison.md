@@ -30,3 +30,11 @@ The diagnostic ASTC test sampled a synthetic HDR-encoded block through an NVN 0x
 Correction: the documented overwritten texture-command case with a white screen concerns Luigi's Mansion 3, not Pokémon Z-A. It should not be represented as a confirmed Z-A bug.
 
 Sources: https://github.com/igawa6/peanuts-native/blob/719d4f7b6ffd/dm/games/0100F43008C44000/README.md and https://github.com/igawa6/peanuts-native/blob/719d4f7b6ffd/docs/reference/nvn-objects.md .
+
+## Targeted capture, 2026-11-24
+
+Faux123 1.1.8 with DM_VK_TEX_PEEK=ead6e2a32540b19a,ed36f2f5bb1791b6 and limit 5000. Screenshot shows white battle with HUD. The log contains 93 unique tex-peek rows (13 for ead6..., 80 for ed36...), frame numbers 1 through 2269, and 124 rt-peek rows. These are deduplicated by shader/binding/texture ID/view outcome (rt by image/range), not a frame-by-frame trace and not a pixel-content inspection. A missing later line does not mean no later draw.
+
+On frame 1, all 13 recorded bindings of deferred-light shader ead6... have a made view. That does not verify the content, depth/stencil aspect or later battle frame. On frame 430, ed36... binding 273 gets two 2D placeholder IDs with no cube view; the replay explicitly reports a zero cube fallback. The same binding has valid cube views for other texture IDs at frame 430 and 2269. This demonstrates a mixed set of placeholder and actual cubes, not proof of the cause or whether a placeholder was sampled. The 32x32x32 render target appears at frame 1 but the text logs the 3D image's array layer count, not proof that 32 depth slices were or were not written. Avoid diagnosing a 3D-layer fault from that line alone.
+
+No shader fix is confirmed. To identify the producer and values, collect a scoped frame capture/image dump and inspect intermediate targets and LUT contents, or isolate a reproducible unit-level fault. No ROM, save, keys or raw personal device log are published here.
