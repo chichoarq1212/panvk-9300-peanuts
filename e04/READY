@@ -1,1 +1,1 @@
-E04 build trigger — corrected whitespace-tolerant source anchors and host regression tests. Build exact HEAD.
+E04 build trigger revision 2: whitespace-tolerant source anchors, tests passed against Mesa source formatting.
