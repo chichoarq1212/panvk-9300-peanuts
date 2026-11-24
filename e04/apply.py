@@ -4,16 +4,27 @@ import argparse
 import re
 from pathlib import Path
 
-TEXEL_CALL = """nir_def *val = nir_load_global_cvt_pan(b, tex->def.num_components,
-                                           tex->def.bit_size, addr, cvt,
-                                           tex->dest_type);"""
-TEXEL_REPLACEMENT = """nir_alu_type load_type =
-      (tex->dest_type == nir_type_float32 && tex->def.bit_size == 32)
-         ? 32 /* AUTO32: preserve integer texel-buffer payload bits */
-         : tex->dest_type;
-   nir_def *val = nir_load_global_cvt_pan(b, tex->def.num_components,
-                                          tex->def.bit_size, addr, cvt,
-                                          load_type);"""
+TEXEL_PATTERN = re.compile(
+    r"(?m)^(?P<indent>[ \t]*)nir_def \*val = nir_load_global_cvt_pan\(b, tex->def.num_components,\n"
+    r"(?P<cont>[ \t]*)tex->def.bit_size, addr, cvt,\n(?P=cont)tex->dest_type\);"
+)
+
+def transform_texel_calls(source):
+    matches = list(TEXEL_PATTERN.finditer(source))
+    if len(matches) != 2:
+        raise ValueError(f"expected 2 Bifrost/Valhall texel-buffer calls, found {len(matches)}")
+    def repl(m):
+        i, c = m.group("indent"), m.group("cont")
+        return (
+            f"{i}nir_alu_type load_type =\n"
+            f"{i}   (tex->dest_type == nir_type_float32 && tex->def.bit_size == 32)\n"
+            f"{i}      ? 32 /* AUTO32: preserve integer texel-buffer payload bits */\n"
+            f"{i}      : tex->dest_type;\n"
+            f"{i}nir_def *val = nir_load_global_cvt_pan(b, tex->def.num_components,\n"
+            f"{c}tex->def.bit_size, addr, cvt,\n"
+            f"{c}load_type);"
+        )
+    return TEXEL_PATTERN.sub(repl, source)
 
 LOAD_CVT = """   bi_instr *I =
       bi_ld_cvt_to(b, dst, bi_extract(b, addr, 0), bi_extract(b, addr, 1), icd,
@@ -35,7 +46,7 @@ def once(s, old, new, n, label):
 
 def patch(tex, compiler):
     # Both Bifrost and Valhall texel-buffer lowering paths must agree.
-    tex=once(tex,TEXEL_CALL,TEXEL_REPLACEMENT,2,"texel-buffer lowering")
+    tex=transform_texel_calls(tex)
     # Only this load intrinsic accepts the AUTO32 pseudo-type. Other loads
     # continue to select their exact float/signed/unsigned register format.
     compiler=once(compiler,LOAD_CVT,LOAD_CVT_REPLACEMENT,1,"LD_CVT emitter")
