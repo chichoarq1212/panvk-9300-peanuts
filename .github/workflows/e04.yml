@@ -27,7 +27,7 @@ jobs:
           b = b.replace('guard meta descriptor copies and trace color clears on arch 12','integer texel-buffer bit preservation via AUTO32 on arch 12')
           Path('scripts/build_e04.sh').write_text(b)
           p = Path('scripts/package.py')
-          p.write_text(p.read_text().replace('e01','e04').replace('E01','E04').replace('0.0.1','0.0.4').replace("if mode == 'e04': assert b'PANVK9300_E04' in b, 'instrumentation missing'\\n",''))
+          p.write_text(p.read_text().replace('e01','e04').replace('E01','E04').replace('0.0.1','0.0.4').replace("if mode == 'e04': assert b'PANVK9300_E04' in b, 'instrumentation missing'",''))
           PY
       - name: Install build dependencies
         run: |
